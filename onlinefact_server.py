@@ -33,9 +33,10 @@ logger = logging.getLogger("onlinefact-mcp")
 
 from mcp.server.fastmcp import FastMCP
 
-# Transport/port detectie (nodig vóór FastMCP creatie voor SSE settings)
+# Transport/port/token detectie (nodig vóór FastMCP creatie voor SSE settings)
 _transport = os.environ.get("MCP_TRANSPORT", "stdio")
 _port = int(os.environ.get("PORT", "10000"))
+_bearer_token = os.environ.get("MCP_BEARER_TOKEN", "")
 
 
 # ── OnlineFact API Client (standalone, geen YilmazTool import nodig) ──
@@ -548,8 +549,33 @@ def test_verbinding() -> str:
 
 if __name__ == "__main__":
     if _transport == "sse":
-        logger.info(f"OnlineFact MCP Server gestart (SSE, poort {_port})")
-        mcp.run(transport="sse")
+        if _bearer_token:
+            # Beveiligde SSE met bearer token middleware
+            import uvicorn
+            from starlette.middleware import Middleware
+            from starlette.middleware.base import BaseHTTPMiddleware
+            from starlette.responses import JSONResponse
+
+            class BearerAuthMiddleware(BaseHTTPMiddleware):
+                async def dispatch(self, request, call_next):
+                    auth = request.headers.get("Authorization", "")
+                    if auth != f"Bearer {_bearer_token}":
+                        return JSONResponse(
+                            {"error": "Unauthorized"}, status_code=401
+                        )
+                    return await call_next(request)
+
+            app = mcp.sse_app()
+            app.add_middleware(BearerAuthMiddleware)
+
+            logger.info(f"OnlineFact MCP Server gestart (SSE+Auth, poort {_port})")
+            config = uvicorn.Config(app, host="0.0.0.0", port=_port, log_level="info")
+            server = uvicorn.Server(config)
+            import asyncio
+            asyncio.run(server.serve())
+        else:
+            logger.info(f"OnlineFact MCP Server gestart (SSE, poort {_port})")
+            mcp.run(transport="sse")
     else:
         logger.info("OnlineFact MCP Server gestart (stdio)")
         mcp.run(transport="stdio")
