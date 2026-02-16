@@ -33,6 +33,10 @@ logger = logging.getLogger("onlinefact-mcp")
 
 from mcp.server.fastmcp import FastMCP
 
+# Transport/port detectie (nodig vóór FastMCP creatie voor SSE settings)
+_transport = os.environ.get("MCP_TRANSPORT", "stdio")
+_port = int(os.environ.get("PORT", "10000"))
+
 
 # ── OnlineFact API Client (standalone, geen YilmazTool import nodig) ──
 
@@ -204,8 +208,7 @@ logger.info("OnlineFact API client geladen")
 
 # ── MCP Server ────────────────────────────────────────────────
 
-mcp = FastMCP(
-    "onlinefact",
+_mcp_kwargs = dict(
     instructions=(
         "OnlineFact kassasysteem van Yilmaz Voeding XL. "
         "Bevat producten, klanten, facturen en verkooprapporten. "
@@ -213,6 +216,11 @@ mcp = FastMCP(
         "1=offerte, 2=bestelling, 3=factuur, 4=creditnota, 5=leveringsbon, 8=ticket."
     ),
 )
+if _transport == "sse":
+    _mcp_kwargs["host"] = "0.0.0.0"
+    _mcp_kwargs["port"] = _port
+
+mcp = FastMCP("onlinefact", **_mcp_kwargs)
 
 # ── PRODUCTEN ─────────────────────────────────────────────────
 
@@ -539,12 +547,9 @@ def test_verbinding() -> str:
 # ── Start ─────────────────────────────────────────────────────
 
 if __name__ == "__main__":
-    transport = os.environ.get("MCP_TRANSPORT", "stdio")
-    port = int(os.environ.get("PORT", "10000"))
-
-    if transport == "sse":
-        logger.info(f"OnlineFact MCP Server gestart (SSE, poort {port})")
-        mcp.run(transport="sse", host="0.0.0.0", port=port)
+    if _transport == "sse":
+        logger.info(f"OnlineFact MCP Server gestart (SSE, poort {_port})")
+        mcp.run(transport="sse")
     else:
         logger.info("OnlineFact MCP Server gestart (stdio)")
         mcp.run(transport="stdio")
