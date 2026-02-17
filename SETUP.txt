@@ -1,24 +1,23 @@
 OnlineFact MCP Server - Setup Info
 ====================================
 
-SERVER URL:
-  https://onlinefact-mcp.onrender.com/sse
+SERVER URL (geheim pad, deel met niemand!):
+  https://onlinefact-mcp.onrender.com/5156490603d507d7/sse
 
-BEARER TOKEN:
-  WNhp_25JjReU1DKOVCdTWrH2naCcKORSkASXjHQWBvw
+Beveiliging: URL met geheim pad (geen wachtwoord nodig)
+Claude.ai ondersteunt geen bearer tokens, alleen OAuth of authless.
 
 ------------------------------------
 Claude.ai Setup (web + mobiel)
 ------------------------------------
-1. Ga naar: claude.ai
-2. Settings > Integrations (of Connected Tools)
-3. Add Integration / Add MCP Server
-4. Optie A (met apart token veld):
-     URL:   https://onlinefact-mcp.onrender.com/sse
-     Auth:  Bearer Token
-     Token: WNhp_25JjReU1DKOVCdTWrH2naCcKORSkASXjHQWBvw
-5. Optie B (token in URL, als A niet werkt):
-     URL:   https://onlinefact-mcp.onrender.com/sse?token=WNhp_25JjReU1DKOVCdTWrH2naCcKORSkASXjHQWBvw
+1. Ga naar: claude.ai (inloggen)
+2. Klik op je profiel icoon > Settings
+3. Klik op "Connectors" in de zijbalk
+4. Scroll naar beneden, klik "Add custom connector"
+5. Vul in als URL:
+     https://onlinefact-mcp.onrender.com/5156490603d507d7/sse
+6. Klik "Add" (geen auth nodig)
+7. Klaar! Nu kun je vanuit Claude vragen stellen over je winkeldata.
 
 ------------------------------------
 Render Dashboard
@@ -30,12 +29,11 @@ Env vars op Render:
   ONLINEFACT_API_URL  = https://api.onlinefact.be
   ONLINEFACT_API_KEY  = yYobeywsqG
   ONLINEFACT_API_SECRET = IfXrmppIt8
-  MCP_BEARER_TOKEN    = WNhp_25JjReU1DKOVCdTWrH2naCcKORSkASXjHQWBvw
 
 ------------------------------------
 Lokaal gebruik (Claude Code)
 ------------------------------------
-Automatisch via .mcp.json (geen token nodig lokaal)
+Automatisch via .mcp.json (stdio, geen URL nodig)
 
 ------------------------------------
 Voorbeeldvragen op Claude.ai
@@ -50,5 +48,5 @@ Voorbeeldvragen op Claude.ai
 Let op
 ------------------------------------
 - Render free tier: slaapt na 15 min inactiviteit, eerste request duurt ~50 sec
-- Deel de bearer token met niemand
+- Deel de URL met niemand (geheim pad = beveiliging)
 - GitHub repo: github.com/Azrail58/onlinefact-mcp (private)
