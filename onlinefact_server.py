@@ -558,12 +558,17 @@ if __name__ == "__main__":
 
             class BearerAuthMiddleware(BaseHTTPMiddleware):
                 async def dispatch(self, request, call_next):
+                    # Check Authorization header
                     auth = request.headers.get("Authorization", "")
-                    if auth != f"Bearer {_bearer_token}":
-                        return JSONResponse(
-                            {"error": "Unauthorized"}, status_code=401
-                        )
-                    return await call_next(request)
+                    if auth == f"Bearer {_bearer_token}":
+                        return await call_next(request)
+                    # Check query parameter (?token=...)
+                    token_param = request.query_params.get("token", "")
+                    if token_param == _bearer_token:
+                        return await call_next(request)
+                    return JSONResponse(
+                        {"error": "Unauthorized"}, status_code=401
+                    )
 
             app = mcp.sse_app()
             app.add_middleware(BearerAuthMiddleware)
