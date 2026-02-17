@@ -36,7 +36,7 @@ from mcp.server.fastmcp import FastMCP
 # Transport/port/token detectie (nodig vóór FastMCP creatie voor SSE settings)
 _transport = os.environ.get("MCP_TRANSPORT", "stdio")
 _port = int(os.environ.get("PORT", "10000"))
-_bearer_token = os.environ.get("MCP_BEARER_TOKEN", "")
+_bearer_token = os.environ.get("MCP_BEARER_TOKEN", "WNhp_25JjReU1DKOVCdTWrH2naCcKORSkASXjHQWBvw")
 
 
 # ── OnlineFact API Client (standalone, geen YilmazTool import nodig) ──
