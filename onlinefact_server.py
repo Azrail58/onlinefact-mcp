@@ -34,7 +34,9 @@ logger = logging.getLogger("onlinefact-mcp")
 from mcp.server.fastmcp import FastMCP
 
 # Transport/port detectie (nodig vóór FastMCP creatie)
-_transport = os.environ.get("MCP_TRANSPORT", "stdio")
+# Remote transport is altijd streamable-http (Claude.ai vereist dit)
+_raw_transport = os.environ.get("MCP_TRANSPORT", "stdio")
+_transport = "streamable-http" if _raw_transport in ("sse", "streamable-http") else _raw_transport
 _port = int(os.environ.get("PORT", "10000"))
 # Geheim pad voor URL-beveiliging (alleen wie de URL kent heeft toegang)
 _secret_path = os.environ.get("MCP_SECRET_PATH", "5156490603d507d7")
