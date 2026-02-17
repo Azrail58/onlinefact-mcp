@@ -33,10 +33,11 @@ logger = logging.getLogger("onlinefact-mcp")
 
 from mcp.server.fastmcp import FastMCP
 
-# Transport/port/token detectie (nodig vóór FastMCP creatie voor SSE settings)
+# Transport/port detectie (nodig vóór FastMCP creatie)
 _transport = os.environ.get("MCP_TRANSPORT", "stdio")
 _port = int(os.environ.get("PORT", "10000"))
-_bearer_token = os.environ.get("MCP_BEARER_TOKEN", "WNhp_25JjReU1DKOVCdTWrH2naCcKORSkASXjHQWBvw")
+# Geheim pad voor URL-beveiliging (alleen wie de URL kent heeft toegang)
+_secret_path = os.environ.get("MCP_SECRET_PATH", "5156490603d507d7")
 
 
 # ── OnlineFact API Client (standalone, geen YilmazTool import nodig) ──
@@ -209,17 +210,21 @@ logger.info("OnlineFact API client geladen")
 
 # ── MCP Server ────────────────────────────────────────────────
 
-_mcp_kwargs = dict(
-    instructions=(
-        "OnlineFact kassasysteem van Yilmaz Voeding XL. "
-        "Bevat producten, klanten, facturen en verkooprapporten. "
-        "Alle prijzen zijn in EUR. Documenten types: "
-        "1=offerte, 2=bestelling, 3=factuur, 4=creditnota, 5=leveringsbon, 8=ticket."
-    ),
+_instructions = (
+    "OnlineFact kassasysteem van Yilmaz Voeding XL. "
+    "Bevat producten, klanten, facturen en verkooprapporten. "
+    "Alle prijzen zijn in EUR. Documenten types: "
+    "1=offerte, 2=bestelling, 3=factuur, 4=creditnota, 5=leveringsbon, 8=ticket."
 )
-if _transport == "sse":
+
+_mcp_kwargs = dict(instructions=_instructions)
+if _transport in ("sse", "streamable-http"):
     _mcp_kwargs["host"] = "0.0.0.0"
     _mcp_kwargs["port"] = _port
+    # Geheim pad als URL prefix zodat alleen wie de URL kent toegang heeft
+    _mcp_kwargs["streamable_http_path"] = f"/{_secret_path}/mcp"
+    _mcp_kwargs["sse_path"] = f"/{_secret_path}/sse"
+    _mcp_kwargs["message_path"] = f"/{_secret_path}/messages/"
 
 mcp = FastMCP("onlinefact", **_mcp_kwargs)
 
@@ -548,39 +553,14 @@ def test_verbinding() -> str:
 # ── Start ─────────────────────────────────────────────────────
 
 if __name__ == "__main__":
-    if _transport == "sse":
-        if _bearer_token:
-            # Beveiligde SSE met bearer token middleware
-            import uvicorn
-            from starlette.middleware import Middleware
-            from starlette.middleware.base import BaseHTTPMiddleware
-            from starlette.responses import JSONResponse
-
-            class BearerAuthMiddleware(BaseHTTPMiddleware):
-                async def dispatch(self, request, call_next):
-                    # Check Authorization header
-                    auth = request.headers.get("Authorization", "")
-                    if auth == f"Bearer {_bearer_token}":
-                        return await call_next(request)
-                    # Check query parameter (?token=...)
-                    token_param = request.query_params.get("token", "")
-                    if token_param == _bearer_token:
-                        return await call_next(request)
-                    return JSONResponse(
-                        {"error": "Unauthorized"}, status_code=401
-                    )
-
-            app = mcp.sse_app()
-            app.add_middleware(BearerAuthMiddleware)
-
-            logger.info(f"OnlineFact MCP Server gestart (SSE+Auth, poort {_port})")
-            config = uvicorn.Config(app, host="0.0.0.0", port=_port, log_level="info")
-            server = uvicorn.Server(config)
-            import asyncio
-            asyncio.run(server.serve())
-        else:
-            logger.info(f"OnlineFact MCP Server gestart (SSE, poort {_port})")
-            mcp.run(transport="sse")
+    if _transport == "streamable-http":
+        logger.info(f"OnlineFact MCP Server gestart (streamable-http, poort {_port})")
+        logger.info(f"Endpoint: /{_secret_path}/mcp")
+        mcp.run(transport="streamable-http")
+    elif _transport == "sse":
+        logger.info(f"OnlineFact MCP Server gestart (SSE, poort {_port})")
+        logger.info(f"Endpoint: /{_secret_path}/sse")
+        mcp.run(transport="sse")
     else:
         logger.info("OnlineFact MCP Server gestart (stdio)")
         mcp.run(transport="stdio")

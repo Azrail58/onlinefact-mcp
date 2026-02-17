@@ -1,0 +1,54 @@
+OnlineFact MCP Server - Setup Info
+====================================
+
+SERVER URL:
+  https://onlinefact-mcp.onrender.com/sse
+
+BEARER TOKEN:
+  WNhp_25JjReU1DKOVCdTWrH2naCcKORSkASXjHQWBvw
+
+------------------------------------
+Claude.ai Setup (web + mobiel)
+------------------------------------
+1. Ga naar: claude.ai
+2. Settings > Integrations (of Connected Tools)
+3. Add Integration / Add MCP Server
+4. Optie A (met apart token veld):
+     URL:   https://onlinefact-mcp.onrender.com/sse
+     Auth:  Bearer Token
+     Token: WNhp_25JjReU1DKOVCdTWrH2naCcKORSkASXjHQWBvw
+5. Optie B (token in URL, als A niet werkt):
+     URL:   https://onlinefact-mcp.onrender.com/sse?token=WNhp_25JjReU1DKOVCdTWrH2naCcKORSkASXjHQWBvw
+
+------------------------------------
+Render Dashboard
+------------------------------------
+https://dashboard.render.com/web/srv-d69qorg6fj8s73cp2h5g
+
+Env vars op Render:
+  MCP_TRANSPORT       = sse
+  ONLINEFACT_API_URL  = https://api.onlinefact.be
+  ONLINEFACT_API_KEY  = yYobeywsqG
+  ONLINEFACT_API_SECRET = IfXrmppIt8
+  MCP_BEARER_TOKEN    = WNhp_25JjReU1DKOVCdTWrH2naCcKORSkASXjHQWBvw
+
+------------------------------------
+Lokaal gebruik (Claude Code)
+------------------------------------
+Automatisch via .mcp.json (geen token nodig lokaal)
+
+------------------------------------
+Voorbeeldvragen op Claude.ai
+------------------------------------
+- Zoek product Kizilay
+- Wat is de omzet van deze maand?
+- Toon alle categorieen
+- Welke klanten heb ik?
+- Maak een factuur voor ...
+
+------------------------------------
+Let op
+------------------------------------
+- Render free tier: slaapt na 15 min inactiviteit, eerste request duurt ~50 sec
+- Deel de bearer token met niemand
+- GitHub repo: github.com/Azrail58/onlinefact-mcp (private)
