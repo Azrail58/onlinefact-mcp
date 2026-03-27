@@ -1,5 +1,5 @@
 """
-OnlineFact MCP Server v2.0 - Yilmaz Voeding XL
+OnlineFact MCP Server v3.0 - Yilmaz Voeding XL
 ================================================
 MCP server die OnlineFact REST API ontsluit voor Claude.
 Gebruik vanuit Claude Code, Claude Desktop, of Claude.ai (via remote MCP).
@@ -13,7 +13,8 @@ Env vars (voor cloud deployment):
   MCP_TRANSPORT=sse|streamable-http (default: stdio)
   PORT=10000 (Render default)
 
-Tools (38): producten, categorieën, merken, klanten, facturen, rapporten, analyse, leveranciers.
+Tools (55+): producten, categorieën, merken, klanten, leveranciers, facturen,
+  creditnota's, bestellingen, voorraad, rapporten, analyse.
 Prompts (3): maandrapport, inventaris_check, prijslijst.
 Resources (2): catalogus, categorieen.
 """
@@ -120,12 +121,38 @@ class OnlineFactAPI:
     def delete_product(self, product_id):
         return self._delete(f"products/{product_id}/")
 
-    # Categories & Brands
+    # Categories
     def list_categories(self, page=1, limit=100):
         return self._get("categories/", {"page": page, "limit": limit})
 
+    def get_category(self, category_id):
+        return self._get(f"categories/{category_id}/")
+
+    def create_category(self, name, parent_id=0, sort_order=0):
+        data = {"name": name, "parent_id": parent_id, "sort_order": sort_order}
+        return self._post("categories/", data)
+
+    def update_category(self, category_id, **fields):
+        return self._put(f"categories/{category_id}/", fields)
+
+    def delete_category(self, category_id):
+        return self._delete(f"categories/{category_id}/")
+
+    # Brands
     def list_brands(self, page=1, limit=100):
         return self._get("brands/", {"page": page, "limit": limit})
+
+    def get_brand(self, brand_id):
+        return self._get(f"brands/{brand_id}/")
+
+    def create_brand(self, name):
+        return self._post("brands/", {"name": name})
+
+    def update_brand(self, brand_id, **fields):
+        return self._put(f"brands/{brand_id}/", fields)
+
+    def delete_brand(self, brand_id):
+        return self._delete(f"brands/{brand_id}/")
 
     # Customers
     def list_customers(self, page=1, limit=100, **filters):
@@ -238,7 +265,8 @@ logger.info("OnlineFact API client geladen")
 
 _instructions = (
     "OnlineFact kassasysteem van Yilmaz Voeding XL. "
-    "Bevat producten, klanten, facturen en verkooprapporten. "
+    "Bevat producten, categorieën, merken, klanten, leveranciers, facturen, "
+    "creditnota's, bestellingen, offertes, leveringsbonnen, voorraad en verkooprapporten. "
     "Alle prijzen zijn in EUR. Documenten types: "
     "1=offerte, 2=bestelling, 3=factuur, 4=creditnota, 5=leveringsbon, 8=ticket."
 )
@@ -383,6 +411,98 @@ def lijst_merken() -> str:
         return json.dumps(results, indent=2, ensure_ascii=False)
     except Exception as e:
         return f"Fout bij ophalen merken: {e}"
+
+
+@mcp.tool()
+def maak_categorie(naam: str, parent_id: int = 0, sortering: int = 0) -> str:
+    """Maak een nieuwe productcategorie aan in OnlineFact.
+
+    Args:
+        naam: Categorienaam (bijv. 'Bakkerij')
+        parent_id: Bovenliggende categorie ID (0 = hoofdcategorie)
+        sortering: Sorteervolgorde (0 = standaard)
+    """
+    try:
+        result = api.create_category(name=naam, parent_id=parent_id, sort_order=sortering)
+        return json.dumps(result, indent=2, ensure_ascii=False)
+    except Exception as e:
+        return f"Fout bij aanmaken categorie: {e}"
+
+
+@mcp.tool()
+def update_categorie(categorie_id: int, velden: str) -> str:
+    """Wijzig een bestaande categorie in OnlineFact.
+
+    Args:
+        categorie_id: Het categorie ID
+        velden: JSON string met te wijzigen velden, bijv. '{"name": "Nieuwe Naam", "sort_order": 5}'
+            Mogelijke velden: name, parent_id, sort_order
+    """
+    try:
+        fields = json.loads(velden)
+        result = api.update_category(categorie_id, **fields)
+        return json.dumps(result, indent=2, ensure_ascii=False)
+    except json.JSONDecodeError:
+        return f"Ongeldige JSON: {velden}"
+    except Exception as e:
+        return f"Fout bij updaten categorie {categorie_id}: {e}"
+
+
+@mcp.tool()
+def verwijder_categorie(categorie_id: int) -> str:
+    """Verwijder een categorie uit OnlineFact. LET OP: dit is permanent!
+
+    Args:
+        categorie_id: Het categorie ID om te verwijderen
+    """
+    try:
+        api.delete_category(categorie_id)
+        return f"Categorie {categorie_id} is verwijderd."
+    except Exception as e:
+        return f"Fout bij verwijderen categorie {categorie_id}: {e}"
+
+
+@mcp.tool()
+def maak_merk(naam: str) -> str:
+    """Maak een nieuw merk aan in OnlineFact.
+
+    Args:
+        naam: Merknaam (bijv. 'HARIBO')
+    """
+    try:
+        result = api.create_brand(name=naam)
+        return json.dumps(result, indent=2, ensure_ascii=False)
+    except Exception as e:
+        return f"Fout bij aanmaken merk: {e}"
+
+
+@mcp.tool()
+def update_merk(merk_id: int, naam: str) -> str:
+    """Wijzig een bestaand merk in OnlineFact.
+
+    Args:
+        merk_id: Het merk ID
+        naam: Nieuwe merknaam
+    """
+    try:
+        result = api.update_brand(merk_id, name=naam)
+        return json.dumps(result, indent=2, ensure_ascii=False)
+    except Exception as e:
+        return f"Fout bij updaten merk {merk_id}: {e}"
+
+
+@mcp.tool()
+def verwijder_merk(merk_id: int) -> str:
+    """Verwijder een merk uit OnlineFact. LET OP: dit is permanent!
+
+    Args:
+        merk_id: Het merk ID om te verwijderen
+    """
+    try:
+        api.delete_brand(merk_id)
+        return f"Merk {merk_id} is verwijderd."
+    except Exception as e:
+        return f"Fout bij verwijderen merk {merk_id}: {e}"
 
 
 # ── KLANTEN ───────────────────────────────────────────────────
@@ -1019,6 +1139,506 @@ def lijst_leveranciers() -> str:
         return f"Fout bij ophalen leveranciers: {e}"
 
 
+# ── LEVERANCIER CRUD ────────────────────────────────────────
+
+@mcp.tool()
+def maak_leverancier(
+    naam: str,
+    btw_nr: str = "",
+    adres: str = "",
+    postcode: str = "",
+    stad: str = "",
+    email: str = "",
+    telefoon: str = "",
+) -> str:
+    """Maak een nieuwe leverancier aan in OnlineFact.
+
+    Args:
+        naam: Bedrijfsnaam leverancier
+        btw_nr: BTW-nummer (bijv. 'BE0123456789')
+        adres: Straat en huisnummer
+        postcode: Postcode
+        stad: Stad/gemeente
+        email: E-mailadres
+        telefoon: Telefoonnummer
+    """
+    try:
+        kwargs = {"type": 2}  # type 2 = leverancier
+        if btw_nr:
+            kwargs["taxnr"] = btw_nr
+        if adres:
+            kwargs["address"] = adres
+        if postcode:
+            kwargs["zip"] = postcode
+        if stad:
+            kwargs["city"] = stad
+        if email:
+            kwargs["email"] = email
+        if telefoon:
+            kwargs["phone"] = telefoon
+        result = api.create_customer(name=naam, **kwargs)
+        return json.dumps(result, indent=2, ensure_ascii=False)
+    except Exception as e:
+        return f"Fout bij aanmaken leverancier: {e}"
+
+
+@mcp.tool()
+def update_leverancier(leverancier_id: int, velden: str) -> str:
+    """Wijzig een bestaande leverancier in OnlineFact.
+
+    Args:
+        leverancier_id: Het leverancier/klant ID
+        velden: JSON string met te wijzigen velden, bijv. '{"name": "Nieuwe Naam", "email": "info@nieuw.be"}'
+            Mogelijke velden: name, address, zip, city, phone, mobile, email, taxnr
+    """
+    try:
+        fields = json.loads(velden)
+        result = api.update_customer(leverancier_id, **fields)
+        return json.dumps(result, indent=2, ensure_ascii=False)
+    except json.JSONDecodeError:
+        return f"Ongeldige JSON: {velden}"
+    except Exception as e:
+        return f"Fout bij updaten leverancier {leverancier_id}: {e}"
+
+
+@mcp.tool()
+def verwijder_leverancier(leverancier_id: int) -> str:
+    """Verwijder een leverancier uit OnlineFact. LET OP: dit is permanent!
+
+    Args:
+        leverancier_id: Het leverancier/klant ID om te verwijderen
+    """
+    try:
+        api.delete_customer(leverancier_id)
+        return f"Leverancier {leverancier_id} is verwijderd."
+    except Exception as e:
+        return f"Fout bij verwijderen leverancier {leverancier_id}: {e}"
+
+
+@mcp.tool()
+def zoek_leverancier(zoekterm: str) -> str:
+    """Zoek leveranciers op naam in OnlineFact.
+
+    Args:
+        zoekterm: Leveranciersnaam of deel ervan (bijv. 'EGE FOOD')
+    """
+    try:
+        results = api.list_customers(limit=100, name=zoekterm)
+        if isinstance(results, list):
+            results = [k for k in results if str(k.get("type", "1")) == "2"]
+        if not results:
+            return f"Geen leveranciers gevonden voor '{zoekterm}'"
+        formatted = [{
+            "id": k.get("customer_id"),
+            "naam": k.get("name"),
+            "btw_nr": k.get("taxnr"),
+            "adres": f"{k.get('address', '')} {k.get('zip', '')} {k.get('city', '')}".strip(),
+            "email": k.get("email"),
+            "telefoon": k.get("phone") or k.get("mobile"),
+        } for k in results]
+        return json.dumps(formatted, indent=2, ensure_ascii=False)
+    except Exception as e:
+        return f"Fout bij zoeken leverancier: {e}"
+
+
+# ── VOORRAAD MUTATIES ──────────────────────────────────────
+
+@mcp.tool()
+def voorraad_correctie(product_id: int, nieuwe_voorraad: float) -> str:
+    """Pas de voorraad van een product handmatig aan (correctie/telling).
+
+    Args:
+        product_id: Het product ID
+        nieuwe_voorraad: De nieuwe voorraadstand (bijv. 50)
+    """
+    try:
+        # Haal huidige voorraad op voor logging
+        product = api.get_product(product_id)
+        oude_voorraad = float(product.get("stock", 0) or 0)
+        naam = product.get("description", "Onbekend")
+        result = api.update_product(product_id, stock=nieuwe_voorraad)
+        verschil = nieuwe_voorraad - oude_voorraad
+        return (f"Voorraad aangepast: {naam}\n"
+                f"  Oud: {oude_voorraad}\n"
+                f"  Nieuw: {nieuwe_voorraad}\n"
+                f"  Verschil: {verschil:+.0f}")
+    except Exception as e:
+        return f"Fout bij voorraadcorrectie product {product_id}: {e}"
+
+
+@mcp.tool()
+def voorraad_bulk_correctie(correcties: str) -> str:
+    """Pas voorraad aan voor meerdere producten tegelijk (bijv. na telling).
+
+    Args:
+        correcties: JSON array met correcties, bijv. '[{"product_id": 5, "voorraad": 100}, {"product_id": 14, "voorraad": 50}]'
+    """
+    try:
+        items = json.loads(correcties)
+        resultaten = []
+        for item in items:
+            pid = item.get("product_id")
+            nieuwe = item.get("voorraad", item.get("stock", 0))
+            try:
+                product = api.get_product(pid)
+                oude = float(product.get("stock", 0) or 0)
+                naam = product.get("description", "Onbekend")
+                api.update_product(pid, stock=nieuwe)
+                verschil = nieuwe - oude
+                resultaten.append(f"OK: {naam} (#{pid}): {oude} → {nieuwe} ({verschil:+.0f})")
+            except Exception as e:
+                resultaten.append(f"FOUT: Product #{pid}: {e}")
+        return "\n".join(resultaten)
+    except json.JSONDecodeError:
+        return f"Ongeldige JSON: {correcties}"
+    except Exception as e:
+        return f"Fout bij bulk correctie: {e}"
+
+
+@mcp.tool()
+def voorraad_bijvullen_advies(drempel: int = 10, min_verkoop: int = 1) -> str:
+    """Genereer een besteladvies: welke producten moeten bijbesteld worden.
+
+    Args:
+        drempel: Voorraaddrempel - producten met minder worden geadviseerd (standaard 10)
+        min_verkoop: Minimale verkoop in afgelopen maand om relevant te zijn (standaard 1)
+    """
+    try:
+        # Haal alle producten op
+        alle_producten = []
+        page = 1
+        while page <= 20:
+            batch = api.list_products(page=page, limit=100)
+            if not batch or not isinstance(batch, list):
+                break
+            alle_producten.extend(batch)
+            if len(batch) < 100:
+                break
+            page += 1
+        # Haal verkoop afgelopen maand op
+        vandaag = datetime.now()
+        maand_geleden = (vandaag - timedelta(days=30)).strftime("%Y-%m-%d")
+        vandaag_str = vandaag.strftime("%Y-%m-%d")
+        verkoop = api.get_sales_per_product(min_date=maand_geleden, max_date=vandaag_str, limit=100)
+        verkoop_map = {}
+        if isinstance(verkoop, list):
+            for v in verkoop:
+                pid = str(v.get("product_id", ""))
+                verkoop_map[pid] = float(v.get("quantity", 0) or 0)
+        # Filter en bouw advies
+        advies = []
+        for p in alle_producten:
+            stock = float(p.get("stock", 0) or 0)
+            pid = str(p.get("product_id", p.get("id", "")))
+            verkocht = verkoop_map.get(pid, 0)
+            if stock <= drempel and p.get("managestock") and verkocht >= min_verkoop:
+                advies.append({
+                    "product_id": pid,
+                    "naam": p.get("description"),
+                    "referentie": p.get("reference"),
+                    "huidige_voorraad": stock,
+                    "verkocht_30d": verkocht,
+                    "leverancier": p.get("supplier", ""),
+                    "advies_bestellen": max(int(verkocht * 2 - stock), 10),
+                })
+        advies.sort(key=lambda x: x["huidige_voorraad"])
+        if not advies:
+            return f"Alle producten hebben voldoende voorraad (>{drempel})."
+        return json.dumps(advies, indent=2, ensure_ascii=False)
+    except Exception as e:
+        return f"Fout bij besteladvies: {e}"
+
+
+# ── CREDITNOTA & RETOUREN ──────────────────────────────────
+
+@mcp.tool()
+def maak_creditnota(
+    regels: str,
+    klant_id: int = 0,
+    referentie: str = "",
+    origineel_factuur_id: int = 0,
+) -> str:
+    """Maak een creditnota aan (voor retouren/correcties).
+
+    Args:
+        regels: JSON array met creditnota regels, bijv. '[{"reference":"P001","quantity":1,"description":"Retour Appel","price_vatexcl":1.50,"tax":6}]'
+        klant_id: Klant ID (0 = geen klant)
+        referentie: Eigen referentie/reden (bijv. 'Retour - beschadigd')
+        origineel_factuur_id: Originele factuur ID ter referentie (optioneel)
+    """
+    try:
+        lines = json.loads(regels)
+        ref = referentie
+        if origineel_factuur_id:
+            ref = f"CN van factuur #{origineel_factuur_id}" + (f" - {referentie}" if referentie else "")
+        result = api.create_document(
+            document_type=4,  # 4 = creditnota
+            lines=lines,
+            customer_id=klant_id if klant_id else None,
+            reference=ref if ref else None,
+            payment_method=1,
+        )
+        return json.dumps(result, indent=2, ensure_ascii=False)
+    except json.JSONDecodeError:
+        return f"Ongeldige JSON voor regels: {regels}"
+    except Exception as e:
+        return f"Fout bij aanmaken creditnota: {e}"
+
+
+# ── BESTELLINGEN (INKOOP) ──────────────────────────────────
+
+@mcp.tool()
+def maak_bestelling(
+    leverancier_id: int,
+    regels: str,
+    referentie: str = "",
+    datum: str = "",
+) -> str:
+    """Maak een inkoopbestelling aan bij een leverancier.
+
+    Args:
+        leverancier_id: Leverancier/klant ID
+        regels: JSON array met bestelregels, bijv. '[{"reference":"P001","quantity":24,"description":"Gummy Bears","price_vatexcl":0.63,"tax":6}]'
+        referentie: Eigen referentie/bestelnummer (optioneel)
+        datum: Besteldatum YYYY-MM-DD (leeg = vandaag)
+    """
+    try:
+        lines = json.loads(regels)
+        result = api.create_document(
+            document_type=2,  # 2 = bestelling
+            lines=lines,
+            customer_id=leverancier_id,
+            document_date=datum if datum else None,
+            reference=referentie if referentie else None,
+            payment_method=1,
+        )
+        return json.dumps(result, indent=2, ensure_ascii=False)
+    except json.JSONDecodeError:
+        return f"Ongeldige JSON voor regels: {regels}"
+    except Exception as e:
+        return f"Fout bij aanmaken bestelling: {e}"
+
+
+@mcp.tool()
+def lijst_bestellingen(
+    leverancier_id: int = 0,
+    van_datum: str = "",
+    tot_datum: str = "",
+    pagina: int = 1,
+    aantal: int = 50,
+) -> str:
+    """Toon bestellingen (inkooporders), optioneel gefilterd op leverancier.
+
+    Args:
+        leverancier_id: Filter op leverancier ID (0 = alle)
+        van_datum: Startdatum YYYY-MM-DD (optioneel)
+        tot_datum: Einddatum YYYY-MM-DD (optioneel)
+        pagina: Paginanummer
+        aantal: Aantal per pagina
+    """
+    try:
+        results = api.list_documents(
+            document_type=2,  # 2 = bestelling
+            page=pagina,
+            limit=min(aantal, 100),
+            min_date=van_datum if van_datum else None,
+            max_date=tot_datum if tot_datum else None,
+        )
+        if leverancier_id and isinstance(results, list):
+            results = [d for d in results
+                       if str(d.get("customer_id", "0")) == str(leverancier_id)]
+        if not results:
+            return "Geen bestellingen gevonden."
+        return json.dumps(results, indent=2, ensure_ascii=False)
+    except Exception as e:
+        return f"Fout bij ophalen bestellingen: {e}"
+
+
+@mcp.tool()
+def maak_offerte(
+    klant_id: int,
+    regels: str,
+    referentie: str = "",
+    datum: str = "",
+) -> str:
+    """Maak een offerte aan voor een klant.
+
+    Args:
+        klant_id: Klant ID
+        regels: JSON array met offerteregels, bijv. '[{"reference":"P001","quantity":10,"description":"Gummy Bears","price_vatexcl":0.84,"tax":6}]'
+        referentie: Eigen referentie (optioneel)
+        datum: Offertedatum YYYY-MM-DD (leeg = vandaag)
+    """
+    try:
+        lines = json.loads(regels)
+        result = api.create_document(
+            document_type=1,  # 1 = offerte
+            lines=lines,
+            customer_id=klant_id,
+            document_date=datum if datum else None,
+            reference=referentie if referentie else None,
+            payment_method=1,
+        )
+        return json.dumps(result, indent=2, ensure_ascii=False)
+    except json.JSONDecodeError:
+        return f"Ongeldige JSON voor regels: {regels}"
+    except Exception as e:
+        return f"Fout bij aanmaken offerte: {e}"
+
+
+@mcp.tool()
+def maak_leveringsbon(
+    klant_id: int,
+    regels: str,
+    referentie: str = "",
+    datum: str = "",
+) -> str:
+    """Maak een leveringsbon aan.
+
+    Args:
+        klant_id: Klant ID
+        regels: JSON array met leveringsregels
+        referentie: Eigen referentie (optioneel)
+        datum: Leveringsdatum YYYY-MM-DD (leeg = vandaag)
+    """
+    try:
+        lines = json.loads(regels)
+        result = api.create_document(
+            document_type=5,  # 5 = leveringsbon
+            lines=lines,
+            customer_id=klant_id,
+            document_date=datum if datum else None,
+            reference=referentie if referentie else None,
+            payment_method=1,
+        )
+        return json.dumps(result, indent=2, ensure_ascii=False)
+    except json.JSONDecodeError:
+        return f"Ongeldige JSON voor regels: {regels}"
+    except Exception as e:
+        return f"Fout bij aanmaken leveringsbon: {e}"
+
+
+# ── FACTUUR PDF ────────────────────────────────────────────
+
+@mcp.tool()
+def factuur_pdf_url(document_id: int) -> str:
+    """Genereer de PDF download URL voor een factuur/document.
+
+    Args:
+        document_id: Het document/factuur ID
+    """
+    try:
+        doc = api.get_document(document_id)
+        # OnlineFact biedt PDF via standaard URL patroon
+        pdf_url = f"{api.api_url}/documents/{document_id}/pdf/"
+        doc_type_map = {1: "Offerte", 2: "Bestelling", 3: "Factuur",
+                        4: "Creditnota", 5: "Leveringsbon", 8: "Ticket"}
+        doc_type = doc_type_map.get(int(doc.get("document_type", 3)), "Document")
+        return (f"{doc_type} #{document_id}\n"
+                f"PDF URL: {pdf_url}\n"
+                f"Datum: {doc.get('document_date', '?')}\n"
+                f"Bedrag: €{doc.get('total_incl', '?')}")
+    except Exception as e:
+        return f"Fout bij ophalen PDF URL: {e}"
+
+
+# ── KLANT/PRODUCT HISTORIE ─────────────────────────────────
+
+@mcp.tool()
+def klant_historie(klant_id: int, aantal_maanden: int = 3) -> str:
+    """Toon aankoopgeschiedenis van een klant.
+
+    Args:
+        klant_id: Het klant ID
+        aantal_maanden: Hoeveel maanden terug kijken (standaard 3)
+    """
+    try:
+        vandaag = datetime.now()
+        start = (vandaag - timedelta(days=aantal_maanden * 30)).strftime("%Y-%m-%d")
+        eind = vandaag.strftime("%Y-%m-%d")
+        # Haal klantgegevens op
+        klant = api.get_customer(klant_id)
+        naam = klant.get("name", "Onbekend")
+        # Haal facturen op
+        alle_docs = []
+        page = 1
+        while page <= 10:
+            batch = api.list_documents(document_type=3, page=page, limit=100,
+                                       min_date=start, max_date=eind)
+            if not batch or not isinstance(batch, list):
+                break
+            alle_docs.extend(batch)
+            if len(batch) < 100:
+                break
+            page += 1
+        # Filter op klant
+        klant_docs = [d for d in alle_docs
+                      if str(d.get("customer_id", "0")) == str(klant_id)]
+        totaal = sum(float(d.get("total_incl", 0) or 0) for d in klant_docs)
+        result = {
+            "klant": naam,
+            "klant_id": klant_id,
+            "periode": f"{start} t/m {eind}",
+            "aantal_facturen": len(klant_docs),
+            "totaal_besteed": round(totaal, 2),
+            "facturen": [{
+                "id": d.get("id"),
+                "datum": d.get("document_date"),
+                "bedrag_incl": d.get("total_incl"),
+                "referentie": d.get("reference"),
+                "betaalmethode": d.get("payment_method"),
+            } for d in klant_docs]
+        }
+        return json.dumps(result, indent=2, ensure_ascii=False)
+    except Exception as e:
+        return f"Fout bij ophalen klanthistorie: {e}"
+
+
+@mcp.tool()
+def product_verkoop_historie(product_id: int, aantal_maanden: int = 3) -> str:
+    """Toon verkoopgeschiedenis van een specifiek product.
+
+    Args:
+        product_id: Het product ID
+        aantal_maanden: Hoeveel maanden terug kijken (standaard 3)
+    """
+    try:
+        product = api.get_product(product_id)
+        naam = product.get("description", "Onbekend")
+        vandaag = datetime.now()
+        # Per maand omzet ophalen
+        maand_data = []
+        for i in range(aantal_maanden):
+            ref = vandaag - timedelta(days=i * 30)
+            m_start = f"{ref.year}-{ref.month:02d}-01"
+            if ref.month == 12:
+                m_end = f"{ref.year}-12-31"
+            else:
+                m_end = (datetime(ref.year, ref.month + 1, 1) - timedelta(days=1)).strftime("%Y-%m-%d")
+            verkoop = api.get_sales_per_product(min_date=m_start, max_date=m_end, limit=100)
+            product_verkoop = None
+            if isinstance(verkoop, list):
+                for v in verkoop:
+                    if str(v.get("product_id", "")) == str(product_id):
+                        product_verkoop = v
+                        break
+            maand_data.append({
+                "maand": f"{ref.year}-{ref.month:02d}",
+                "aantal_verkocht": float(product_verkoop.get("quantity", 0)) if product_verkoop else 0,
+                "omzet_incl": float(product_verkoop.get("total_incl", 0)) if product_verkoop else 0,
+            })
+        result = {
+            "product": naam,
+            "product_id": product_id,
+            "huidige_voorraad": product.get("stock"),
+            "prijs_incl": product.get("price_incl"),
+            "verkoop_per_maand": maand_data,
+        }
+        return json.dumps(result, indent=2, ensure_ascii=False)
+    except Exception as e:
+        return f"Fout bij ophalen producthistorie: {e}"
+
+
 # ── EXTRA RAPPORTEN ──────────────────────────────────────────
 
 @mcp.tool()
@@ -1207,6 +1827,191 @@ def negatieve_voorraad() -> str:
         return json.dumps(result, indent=2, ensure_ascii=False)
     except Exception as e:
         return f"Fout bij ophalen negatieve voorraad: {e}"
+
+
+# ── JAAROMZET & GEAVANCEERDE RAPPORTEN ───────────────────────
+
+@mcp.tool()
+def jaaromzet(jaar: int = 0) -> str:
+    """Toon omzet per maand voor een heel jaar.
+
+    Args:
+        jaar: Jaar (0 = huidig jaar)
+    """
+    try:
+        j = jaar if jaar else datetime.now().year
+        maanden = []
+        totaal_jaar = 0
+        for m in range(1, 13):
+            van = f"{j}-{m:02d}-01"
+            if m == 12:
+                tot = f"{j}-12-31"
+            else:
+                tot = (datetime(j, m + 1, 1) - timedelta(days=1)).strftime("%Y-%m-%d")
+            # Sla toekomstige maanden over
+            if datetime(j, m, 1) > datetime.now():
+                break
+            try:
+                totals = api.get_sale_totals(min_date=van, max_date=tot)
+                omzet = 0
+                if isinstance(totals, dict):
+                    omzet = float(totals.get("total_incl", 0) or 0)
+                elif isinstance(totals, list) and totals:
+                    omzet = float(totals[0].get("total_incl", 0) or 0)
+                totaal_jaar += omzet
+                maanden.append({"maand": f"{j}-{m:02d}", "omzet_incl": round(omzet, 2)})
+            except Exception:
+                maanden.append({"maand": f"{j}-{m:02d}", "omzet_incl": 0, "fout": True})
+        result = {
+            "jaar": j,
+            "totaal_omzet_incl": round(totaal_jaar, 2),
+            "gemiddeld_per_maand": round(totaal_jaar / max(len(maanden), 1), 2),
+            "per_maand": maanden,
+        }
+        return json.dumps(result, indent=2, ensure_ascii=False)
+    except Exception as e:
+        return f"Fout bij ophalen jaaromzet: {e}"
+
+
+@mcp.tool()
+def omzet_per_merk(van_datum: str, tot_datum: str) -> str:
+    """Toon omzet per merk voor een periode.
+
+    Args:
+        van_datum: Startdatum (YYYY-MM-DD)
+        tot_datum: Einddatum (YYYY-MM-DD)
+    """
+    try:
+        per_product = api.get_sales_per_product(min_date=van_datum, max_date=tot_datum, limit=100)
+        if not isinstance(per_product, list):
+            return "Geen verkoopdata gevonden."
+        # Haal merken op voor mapping
+        brands = api.list_brands(limit=200)
+        brand_map = {}
+        if isinstance(brands, list):
+            brand_map = {str(b["brand_id"]): b["name"] for b in brands}
+        # Groepeer per merk
+        merk_totals = {}
+        for p in per_product:
+            brand_id = str(p.get("brand_id", "0") or "0")
+            brand_name = brand_map.get(brand_id, "Geen merk")
+            if brand_name not in merk_totals:
+                merk_totals[brand_name] = {"omzet_incl": 0, "aantal_producten": 0, "aantal_verkocht": 0}
+            merk_totals[brand_name]["omzet_incl"] += float(p.get("total_incl", 0) or 0)
+            merk_totals[brand_name]["aantal_producten"] += 1
+            merk_totals[brand_name]["aantal_verkocht"] += float(p.get("quantity", 0) or 0)
+        result = [{"merk": k, "omzet_incl": round(v["omzet_incl"], 2),
+                    "aantal_producten": v["aantal_producten"],
+                    "stuks_verkocht": round(v["aantal_verkocht"], 1)}
+                   for k, v in sorted(merk_totals.items(),
+                                      key=lambda x: x[1]["omzet_incl"], reverse=True)]
+        return json.dumps(result, indent=2, ensure_ascii=False)
+    except Exception as e:
+        return f"Fout bij omzet per merk: {e}"
+
+
+@mcp.tool()
+def klant_ranking(van_datum: str, tot_datum: str, aantal: int = 20) -> str:
+    """Ranglijst van klanten op basis van besteed bedrag.
+
+    Args:
+        van_datum: Startdatum (YYYY-MM-DD)
+        tot_datum: Einddatum (YYYY-MM-DD)
+        aantal: Aantal klanten in de top (standaard 20)
+    """
+    try:
+        result = api.get_sales_per_relation(min_date=van_datum, max_date=tot_datum)
+        if isinstance(result, list):
+            result.sort(key=lambda x: float(x.get("total_incl", 0) or 0), reverse=True)
+            result = result[:aantal]
+        return json.dumps(result, indent=2, ensure_ascii=False)
+    except Exception as e:
+        return f"Fout bij ophalen klant ranking: {e}"
+
+
+@mcp.tool()
+def omzet_per_betaalmethode(van_datum: str, tot_datum: str) -> str:
+    """Toon omzetverdeling per betaalmethode voor een periode.
+
+    Args:
+        van_datum: Startdatum (YYYY-MM-DD)
+        tot_datum: Einddatum (YYYY-MM-DD)
+    """
+    try:
+        methode_map = {
+            "1": "Onbetaald", "2": "Cash", "3": "Overschrijving",
+            "4": "Creditcard", "6": "Bancontact"
+        }
+        alle_docs = []
+        page = 1
+        while page <= 10:
+            batch = api.list_documents(document_type=3, page=page, limit=100,
+                                       min_date=van_datum, max_date=tot_datum)
+            if not batch or not isinstance(batch, list):
+                break
+            alle_docs.extend(batch)
+            if len(batch) < 100:
+                break
+            page += 1
+        # Tickets ook meepakken
+        page = 1
+        while page <= 10:
+            batch = api.list_documents(document_type=8, page=page, limit=100,
+                                       min_date=van_datum, max_date=tot_datum)
+            if not batch or not isinstance(batch, list):
+                break
+            alle_docs.extend(batch)
+            if len(batch) < 100:
+                break
+            page += 1
+        totals = {}
+        for doc in alle_docs:
+            methode = str(doc.get("payment_method", "1"))
+            naam = methode_map.get(methode, f"Onbekend ({methode})")
+            if naam not in totals:
+                totals[naam] = {"aantal": 0, "omzet_incl": 0}
+            totals[naam]["aantal"] += 1
+            totals[naam]["omzet_incl"] += float(doc.get("total_incl", 0) or 0)
+        result = [{"methode": k, "aantal": v["aantal"],
+                    "omzet_incl": round(v["omzet_incl"], 2)}
+                   for k, v in sorted(totals.items(),
+                                      key=lambda x: x[1]["omzet_incl"], reverse=True)]
+        totaal = sum(r["omzet_incl"] for r in result)
+        for r in result:
+            r["percentage"] = round(r["omzet_incl"] / totaal * 100, 1) if totaal else 0
+        return json.dumps({"periode": f"{van_datum} t/m {tot_datum}",
+                           "totaal": round(totaal, 2),
+                           "per_methode": result}, indent=2, ensure_ascii=False)
+    except Exception as e:
+        return f"Fout bij ophalen omzet per betaalmethode: {e}"
+
+
+@mcp.tool()
+def document_overzicht(van_datum: str = "", tot_datum: str = "") -> str:
+    """Toon een overzicht van alle documenttypes (offertes, bestellingen, facturen, etc.).
+
+    Args:
+        van_datum: Startdatum YYYY-MM-DD (optioneel)
+        tot_datum: Einddatum YYYY-MM-DD (optioneel)
+    """
+    try:
+        type_map = {1: "Offertes", 2: "Bestellingen", 3: "Facturen",
+                    4: "Creditnota's", 5: "Leveringsbonnen", 8: "Tickets"}
+        overzicht = []
+        for doc_type, naam in type_map.items():
+            try:
+                docs = api.list_documents(
+                    document_type=doc_type, page=1, limit=1,
+                    min_date=van_datum if van_datum else None,
+                    max_date=tot_datum if tot_datum else None,
+                )
+                aantal = len(docs) if isinstance(docs, list) else 0
+                overzicht.append({"type": doc_type, "naam": naam, "aantal": aantal})
+            except Exception:
+                overzicht.append({"type": doc_type, "naam": naam, "aantal": "?"})
+        return json.dumps(overzicht, indent=2, ensure_ascii=False)
+    except Exception as e:
+        return f"Fout bij ophalen document overzicht: {e}"
 
 
 # ── SYSTEEM ───────────────────────────────────────────────────
